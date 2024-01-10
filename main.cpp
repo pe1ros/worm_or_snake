@@ -1,3 +1,6 @@
+// либа не линкуется призодится юзать доп флаг
+// g++ -o main main.cpp -lncurses
+// #include <curses.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -8,20 +11,55 @@
 std::atomic<char> keyPressed('_');
 
 void keyListener() {
+  // initscr();
+  // cbreak();
+  // noecho();
   while (true) {
-    char key = 'w';
-    std::cin >> key;
-    keyPressed = static_cast<char>(key);
+    char ch;
+    // char ch = getch();
+    std::cin >> ch;
+    keyPressed = static_cast<char>(ch);
+  }
+  // endwin();
+}
+
+struct SnakePart {
+  int x_pos_;
+  int y_pos_;
+  SnakePart* prev;
+  SnakePart* next;
+};
+
+struct Apple {
+  int x_pos_;
+  int y_pos_;
+  bool initialized_;
+};
+
+void GenerateEat(Apple& apple, SnakePart& snake, int size_rows) {
+  if (!apple.initialized_) {
+    apple.x_pos_ = std::rand() % size_rows;
+    apple.y_pos_ = std::rand() % size_rows;
+    do {
+      apple.y_pos_ = std::rand() % size_rows;
+      apple.x_pos_ = std::rand() % size_rows;
+    } while (snake.x_pos_ == apple.x_pos_ || snake.y_pos_ == apple.y_pos_);
+    apple.initialized_ = true;
   }
 }
 
-struct Snake {
-  int x_pos_;
-  int y_pos_;
-};
-
 class Game {
  public:
+  Game(int size_rows, bool isActive)
+      : size_rows_(size_rows), game_is_active_(isActive) {}
+
+  ~Game() {
+    for (int i = 0; i < size_rows_; i++) {
+      delete[] ptr_polygon_[i];
+    }
+    delete[] ptr_polygon_;
+  }
+
   void Start() {
     // int size;
     // std::cout << "Set size of rows from 10 to 20" << "\n";
@@ -30,22 +68,24 @@ class Game {
     // эта строка для того что бы всегда были разные числа
     std::srand(std::time(nullptr));
     // size_rows_ = size;
-    place_ = new int*[size_rows_];
+    ptr_polygon_ = new char*[size_rows_];
     for (int i = 0; i < size_rows_; i++) {
-      place_[i] = new int[size_rows_];
+      ptr_polygon_[i] = new char[size_rows_];
     }
 
     for (int i = 0; i < size_rows_; i++) {
       for (int j = 0; j < size_rows_; j++) {
-        place_[i][j] = 0;
+        ptr_polygon_[i][j] = '.';
       }
     }
 
-    snake_.x_pos_ = std::rand() % 10;
-    snake_.y_pos_ = std::rand() % 10;
-
+    snake_.x_pos_ = std::rand() % size_rows_;
+    snake_.y_pos_ = std::rand() % size_rows_;
+    snake_.next = nullptr;
+    snake_.prev = nullptr;
     std::thread listener(keyListener);
     while (game_is_active_) {
+      GenerateEat(apple_, snake_, size_rows_);
       Move();
       Draw();
     }
@@ -70,17 +110,17 @@ class Game {
         break;
     }
 
-    if (snake_.x_pos_ == 10) {
+    if (snake_.x_pos_ == size_rows_) {
       snake_.x_pos_ = 0;
       return;
-    } else if (snake_.x_pos_ == -1) {
-      snake_.x_pos_ = 9;
+    } else if (snake_.x_pos_ < 0) {
+      snake_.x_pos_ = size_rows_ - 1;
       return;
-    } else if (snake_.y_pos_ == 10) {
+    } else if (snake_.y_pos_ == size_rows_) {
       snake_.y_pos_ = 0;
       return;
-    } else if (snake_.y_pos_ == -1) {
-      snake_.y_pos_ = 9;
+    } else if (snake_.y_pos_ < 0) {
+      snake_.y_pos_ = size_rows_ - 1;
       return;
     }
   }
@@ -90,27 +130,26 @@ class Game {
 
     for (int i = 0; i < size_rows_; i++) {
       for (int j = 0; j < size_rows_; j++) {
-        if (snake_.x_pos_ == i && snake_.y_pos_ == j) {
-          std::cout << "@"
-                    << " ";
-        } else {
-          std::cout << "."
-                    << " ";
-        }
+        snake_.x_pos_ == i&& snake_.y_pos_ == j
+            ? std::cout << "@"
+                        << " "
+            : std::cout << ptr_polygon_[i][j] << " ";
       }
       std::cout << "\n";
     }
+    ptr_polygon_[apple_.x_pos_][apple_.y_pos_] = '#';
   }
 
  private:
-  int size_rows_ = 10;
-  int** place_;
-  Snake snake_;
-  bool game_is_active_ = true;
+  int size_rows_;
+  char** ptr_polygon_;
+  SnakePart snake_;
+  Apple apple_;
+  bool game_is_active_;
 };
 
 int main() {
-  Game game;
+  Game game(20, true);
   game.Start();
 
   return 0;
