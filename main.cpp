@@ -30,144 +30,153 @@ struct SnakePart {
   SnakePart* next;
 };
 
-struct Eat {
-  int x_pos_;
-  int y_pos_;
-  bool initialized_;
-};
-
 class Game {
  public:
-  Game(int size_rows, bool isActive)
-      : size_rows_(size_rows), game_is_active_(isActive), scope_(0) {
-    snake_head_->x_pos_ = std::rand() % size_rows_;
-    snake_head_->y_pos_ = std::rand() % size_rows_;
-    snake_head_->next = nullptr;
-    snake_head_->prev = nullptr;
+  Game(int size_rows_rows) : size_rows_(size_rows_rows) {
+    score_ = 0;
+    InitializeGame();
   }
 
   ~Game() {
-    for (int i = 0; i < size_rows_; i++) {
-      delete[] ptr_polygon_[i];
-    }
-    delete[] ptr_polygon_;
-  }
-
-  void Start() {
-    // int size;
-    // std::cout << "Set size of rows from 10 to 20" << "\n";
-    // std::cin >> size;
-
-    // эта строка для того что бы всегда были разные числа
-    std::srand(std::time(nullptr));
-    // size_rows_ = size;
-    ptr_polygon_ = new char*[size_rows_];
-    for (int i = 0; i < size_rows_; i++) {
-      ptr_polygon_[i] = new char[size_rows_];
-    }
-
-    for (int i = 0; i < size_rows_; i++) {
-      for (int j = 0; j < size_rows_; j++) {
-        ptr_polygon_[i][j] = '.';
-      }
-    }
-
-    std::thread listener(keyListener);
-    while (game_is_active_) {
-      Move();
-      if (!eat_.initialized_) {
-        GenerateEat();
-      }
-      Draw();
-      sleep(1);
-    }
-    listener.join();
-  }
-
-  void Move() {
-    char value = keyPressed.load();
-    // int snake_prev_x = snake_head_->x_pos_;
-    // int snake_prev_y = snake_head_->y_pos_;
-    switch (value) {
-      case 'w':
-        snake_head_->x_pos_ <= 0 ? snake_head_->x_pos_ = size_rows_ - 1
-                                 : --snake_head_->x_pos_;
-        break;
-      case 's':
-        snake_head_->x_pos_ >= size_rows_ - 1 ? snake_head_->x_pos_ = 0
-                                              : ++snake_head_->x_pos_;
-        break;
-      case 'a':
-        snake_head_->y_pos_ <= 0 ? snake_head_->y_pos_ = size_rows_ - 1
-                                 : --snake_head_->y_pos_;
-        break;
-      case 'd':
-        snake_head_->y_pos_ >= size_rows_ - 1 ? snake_head_->y_pos_ = 0
-                                              : ++snake_head_->y_pos_;
-        break;
-    }
-    if (snake_head_->x_pos_ == eat_.x_pos_ &&
-        snake_head_->y_pos_ == eat_.y_pos_) {
-      // snake_head_->next = new SnakePart;
-      // snake_head_->next->x_pos_ = eat_.x_pos_;
-      // snake_head_->next->y_pos_ = eat_.y_pos_;
-      eat_.initialized_ = false;
-      ++scope_;
-    }
-    // if (length_ > 0) {
-    //   while (snake_body_ != NULL) {
-    //     snake_body_->next->x_pos_ = snake_prev_x;
-    //     snake_body_->next->y_pos_ = snake_prev_y;
-    //     snake_body_ = snake_body_->next;
-    //   }
-    // }
-  }
-
-  void Draw() {
-    system("clear");
-    std::cout << "_____scope_____: " << scope_ << "\n";
-    for (int i = 0; i < size_rows_; i++) {
-      for (int j = 0; j < size_rows_; j++) {
-        ptr_polygon_[i][j] = '.';
-      }
-    }
-    ptr_polygon_[eat_.x_pos_][eat_.y_pos_] = '#';
-    ptr_polygon_[snake_head_->x_pos_][snake_head_->y_pos_] = '@';
-    // while (snake_head_->next != NULL) {
-    //   ptr_polygon_[snake_head_->next->x_pos_][snake_head_->next->y_pos_] =
-    //   '*'; snake_head_ = snake_head_->next;
-    // }
-
-    for (int i = 0; i < size_rows_; i++) {
-      for (int j = 0; j < size_rows_; j++) {
-        std::cout << ptr_polygon_[i][j] << " ";
-      }
-      std::cout << "\n";
+    while (head_ != nullptr) {
+      SnakePart* temp = head_;
+      head_ = head_->next;
+      delete temp;
     }
   }
 
-  void GenerateEat() {
-    do {
-      eat_.y_pos_ = std::rand() % size_rows_;
-      eat_.x_pos_ = std::rand() % size_rows_;
-    } while (snake_head_->x_pos_ == eat_.x_pos_ ||
-             snake_head_->y_pos_ == eat_.y_pos_);
-    eat_.initialized_ = true;
+  void Run() {
+    while (true) {
+      DrawGame();
+      MoveSnake();
+
+      if (CheckCollision()) GameOver();
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
   }
 
  private:
+  SnakePart* head_;
+  SnakePart* tail_;
+  SnakePart* food_;
+  int score_;
   int size_rows_;
-  char** ptr_polygon_;
-  SnakePart* snake_head_;
-  // TODO: подумать почему тут не работает инициализация через указатель!?!?
-  Eat eat_;
-  bool game_is_active_;
-  int scope_;
+
+  void InitializeGame() {
+    head_ = new SnakePart;
+    head_->x_pos_ = size_rows_ / 2;
+    head_->y_pos_ = size_rows_ / 2;
+    head_->next = nullptr;
+    head_->prev = nullptr;
+    tail_ = head_;
+    GenerateFood();
+  }
+
+  void DrawGame() {
+    system("clear");
+    for (int i = 0; i < size_rows_; i++) {
+      for (int j = 0; j < size_rows_; j++) {
+        if (i == head_->y_pos_ && j == head_->x_pos_)
+          std::cout << "@";
+        else if (i == food_->y_pos_ && j == food_->x_pos_)
+          std::cout << "*";
+        else {
+          SnakePart* current = head_->next;
+          bool isBodyPart = false;
+          while (current != nullptr) {
+            if (i == current->y_pos_ && j == current->x_pos_) {
+              std::cout << "o";
+              isBodyPart = true;
+            }
+            current = current->next;
+          }
+
+          if (!isBodyPart) std::cout << "_";
+        }
+      }
+      std::cout << std::endl;
+    }
+    std::cout << "Score: " << score_ << std::endl;
+  }
+
+  void MoveSnake() {
+    int new_x = head_->x_pos_;
+    int new_y = head_->y_pos_;
+
+    char key = keyPressed.load();
+    switch (key) {
+      case 'w':
+        new_y <= 0 ? new_y = size_rows_ - 1 : --new_y;
+        break;
+      case 's':
+        new_y >= size_rows_ - 1 ? new_y = 0 : ++new_y;
+        break;
+      case 'a':
+        new_x <= 0 ? new_x = size_rows_ - 1 : --new_x;
+        break;
+      case 'd':
+        new_x >= size_rows_ - 1 ? new_x = 0 : ++new_x;
+        break;
+    }
+
+    SnakePart* new_head = new SnakePart;
+    new_head->x_pos_ = new_x;
+    new_head->y_pos_ = new_y;
+    new_head->next = head_;
+    head_->prev = new_head;
+    head_ = new_head;
+
+    if (new_x == food_->x_pos_ && new_y == food_->y_pos_) {
+      score_++;
+      GenerateFood();
+    } else {
+      SnakePart* temp = tail_;
+      tail_ = tail_->prev;
+      delete temp;
+      tail_->next = nullptr;
+    }
+  }
+
+  void GenerateFood() {
+    int food_x, food_y;
+    do {
+      food_x = rand() % size_rows_;
+      food_y = rand() % size_rows_;
+    } while (head_->x_pos_ == food_x && head_->y_pos_ == food_y);
+
+    food_ = new SnakePart;
+    food_->x_pos_ = food_x;
+    food_->y_pos_ = food_y;
+  }
+
+  bool CheckCollision() {
+    int head_x = head_->x_pos_;
+    int head_y = head_->y_pos_;
+
+    SnakePart* current = head_->next;
+    while (current != nullptr) {
+      if (head_x == current->x_pos_ && head_y == current->y_pos_) return true;
+      current = current->next;
+    }
+
+    return false;
+  }
+
+  void GameOver() {
+    system("clear");
+    std::cout << "Game Over!" << std::endl;
+    std::cout << "Your score: " << score_ << std::endl;
+    exit(0);
+  }
 };
 
 int main() {
-  Game game(20, true);
-  game.Start();
+  srand(static_cast<unsigned>(time(nullptr)));
+  std::thread listener(keyListener);
+
+  Game game(10);
+  game.Run();
 
   return 0;
 }
